@@ -1,0 +1,871 @@
+=====================================================================================================================================
+=====================================================================================================================================
+File Containing Different Variants of my Assignment's task 3 as I had unsatisfactory results each time with different trend sets but
+After each mostly the Scale of TF-IDF was heavier. So I finally concluded.
+
+1st Variant was Target classification by "Disease" 
+2nd Variant was Target classification by "Category" //Category prepared in Task 2 Manually
+3rd Variant was after normalization of Data. 
+
+=====================================================================================================================================
+=====================================================================================================================================
+=====================================================================================================================================
+=====================================================================================================================================
+
+#Task 3: Train KNN Models and Logistic Regression
+
+#Step 1 #########################################################################################
+# Prepare for KNN modeling with different k values and distance metrics
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import cross_val_score, cross_validate, StratifiedKFold
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, make_scorer
+import pandas as pd
+import numpy as np
+import warnings
+warnings.filterwarnings("ignore")  # Suppress warnings
+
+# Define the target variable (disease categories)
+target = df['Disease']
+
+# Define k values and distance metrics to test
+k_values = [3, 5, 7]
+metrics = ['euclidean', 'manhattan', 'cosine']
+
+# Define scoring metrics for cross-validation
+scoring = {
+    'accuracy': make_scorer(accuracy_score),
+    'precision': make_scorer(precision_score, average='weighted', zero_division=0),
+    'recall': make_scorer(recall_score, average='weighted', zero_division=0),
+    'f1': make_scorer(f1_score, average='weighted', zero_division=0)
+}
+
+# Create DataFrames to store results
+knn_tfidf_results = pd.DataFrame(columns=['k', 'metric', 'accuracy', 'precision', 'recall', 'f1'])
+knn_onehot_results = pd.DataFrame(columns=['k', 'metric', 'accuracy', 'precision', 'recall', 'f1'])
+
+#Step 2 #########################################################################################
+# Perform 5-fold cross-validation for KNN with different configurations
+cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)             #5 Folds
+
+# For TF-IDF features
+for k in k_values:                                                    #For loop for each k Value 
+    for metric in metrics:                                            #And each Metric
+        knn = KNeighborsClassifier(n_neighbors=k, metric=metric)
+        # Convert sparse matrix to dense array for some metrics
+        tfidf_array = combined_tfidf.toarray()
+        
+        try:
+            from sklearn.preprocessing import normalize
+            tfidf_normalized = normalize(tfidf_array, norm='l1')
+            cv_results = cross_validate(knn, tfidf_normalized, target, cv=cv, scoring=scoring)
+            cv_results = cross_validate(knn, tfidf_array, target, cv=cv, scoring=scoring)
+            
+            # Store results
+            new_row = pd.DataFrame([{
+                'k': k,
+                'metric': metric,
+                'accuracy': cv_results['test_accuracy'].mean(),
+                'precision': cv_results['test_precision'].mean(),
+                'recall': cv_results['test_recall'].mean(),
+                'f1': cv_results['test_f1'].mean()
+            }])
+            knn_tfidf_results = pd.concat([knn_tfidf_results, new_row], ignore_index=True)
+        except Exception as e:
+            # Handle any errors (like singular matrix issues)
+            print(f"Error with k={k}, metric={metric} for TF-IDF: {e}")
+            new_row = pd.DataFrame([{
+                'k': k,
+                'metric': metric,
+                'accuracy': np.nan,
+                'precision': np.nan,
+                'recall': np.nan,
+                'f1': np.nan
+            }])
+            knn_tfidf_results = pd.concat([knn_tfidf_results, new_row], ignore_index=True)
+
+# For One-hot encoded features
+for k in k_values:
+    for metric in metrics:
+        knn = KNeighborsClassifier(n_neighbors=k, metric=metric)
+        
+        try:
+            cv_results = cross_validate(knn, combined_onehot, target, cv=cv, scoring=scoring)
+            
+            # Store results
+            new_row = pd.DataFrame([{
+                'k': k,
+                'metric': metric,
+                'accuracy': cv_results['test_accuracy'].mean(),
+                'precision': cv_results['test_precision'].mean(),
+                'recall': cv_results['test_recall'].mean(),
+                'f1': cv_results['test_f1'].mean()
+            }])
+            knn_onehot_results = pd.concat([knn_onehot_results, new_row], ignore_index=True)
+        except Exception as e:
+            # Handle any errors
+            print(f"Error with k={k}, metric={metric} for One-hot: {e}")
+            new_row = pd.DataFrame([{
+                'k': k,
+                'metric': metric,
+                'accuracy': np.nan,
+                'precision': np.nan,
+                'recall': np.nan,
+                'f1': np.nan
+            }])
+            knn_onehot_results = pd.concat([knn_onehot_results, new_row], ignore_index=True)
+
+#Step 3 #########################################################################################
+# Report metrics for KNN models
+print("KNN Results with TF-IDF Features:")
+print(knn_tfidf_results.sort_values(by='f1', ascending=False))
+
+print("\nKNN Results with One-hot Encoded Features:")
+print(knn_onehot_results.sort_values(by='f1', ascending=False))
+
+#Step 3.1 #########################################################################################
+# Visualize KNN results with different k values and metrics
+
+# Create a figure with multiple subplots
+plt.figure(figsize=(20, 15))
+
+# 1. Plot accuracy for different k values and metrics (TF-IDF)
+plt.subplot(3, 2, 1)
+for metric in metrics:
+    metric_data = knn_tfidf_results[knn_tfidf_results['metric'] == metric]
+    plt.plot(metric_data['k'], metric_data['accuracy'], 'o-', label=metric)
+plt.title('KNN Accuracy with TF-IDF Features')
+plt.xlabel('k value')
+plt.ylabel('Accuracy')
+plt.xticks(k_values)
+plt.ylim(0, 1)
+plt.legend()
+plt.grid(True, linestyle='--', alpha=0.7)
+
+# 2. Plot accuracy for different k values and metrics (One-hot)
+plt.subplot(3, 2, 2)
+for metric in metrics:
+    metric_data = knn_onehot_results[knn_onehot_results['metric'] == metric]
+    plt.plot(metric_data['k'], metric_data['accuracy'], 'o-', label=metric)
+plt.title('KNN Accuracy with One-hot Features')
+plt.xlabel('k value')
+plt.ylabel('Accuracy')
+plt.xticks(k_values)
+plt.ylim(0, 1)
+plt.legend()
+plt.grid(True, linestyle='--', alpha=0.7)
+
+# 3. Plot F1-score for different k values and metrics (TF-IDF)
+plt.subplot(3, 2, 3)
+for metric in metrics:
+    metric_data = knn_tfidf_results[knn_tfidf_results['metric'] == metric]
+    plt.plot(metric_data['k'], metric_data['f1'], 'o-', label=metric)
+plt.title('KNN F1-Score with TF-IDF Features')
+plt.xlabel('k value')
+plt.ylabel('F1-Score')
+plt.xticks(k_values)
+plt.ylim(0, 1)
+plt.legend()
+plt.grid(True, linestyle='--', alpha=0.7)
+
+# 4. Plot F1-score for different k values and metrics (One-hot)
+plt.subplot(3, 2, 4)
+for metric in metrics:
+    metric_data = knn_onehot_results[knn_onehot_results['metric'] == metric]
+    plt.plot(metric_data['k'], metric_data['f1'], 'o-', label=metric)
+plt.title('KNN F1-Score with One-hot Features')
+plt.xlabel('k value')
+plt.ylabel('F1-Score')
+plt.xticks(k_values)
+plt.ylim(0, 1)
+plt.legend()
+plt.grid(True, linestyle='--', alpha=0.7)
+
+# 5. Compare best metric for each k value (TF-IDF vs One-hot) - Accuracy
+plt.subplot(3, 2, 5)
+tfidf_best_acc = []
+onehot_best_acc = []
+
+for k in k_values:
+    tfidf_k_data = knn_tfidf_results[knn_tfidf_results['k'] == k]
+    onehot_k_data = knn_onehot_results[knn_onehot_results['k'] == k]
+    
+    tfidf_best_acc.append(tfidf_k_data['accuracy'].max())
+    onehot_best_acc.append(onehot_k_data['accuracy'].max())
+
+plt.plot(k_values, tfidf_best_acc, 'o-', label='TF-IDF')
+plt.plot(k_values, onehot_best_acc, 'o-', label='One-hot')
+plt.title('Best Accuracy Comparison (TF-IDF vs One-hot)')
+plt.xlabel('k value')
+plt.ylabel('Best Accuracy')
+plt.xticks(k_values)
+plt.ylim(0, 1)
+plt.legend()
+plt.grid(True, linestyle='--', alpha=0.7)
+
+# 6. Compare best metric for each k value (TF-IDF vs One-hot) - F1-Score
+plt.subplot(3, 2, 6)
+tfidf_best_f1 = []
+onehot_best_f1 = []
+
+for k in k_values:
+    tfidf_k_data = knn_tfidf_results[knn_tfidf_results['k'] == k]
+    onehot_k_data = knn_onehot_results[knn_onehot_results['k'] == k]
+    
+    tfidf_best_f1.append(tfidf_k_data['f1'].max())
+    onehot_best_f1.append(onehot_k_data['f1'].max())
+
+plt.plot(k_values, tfidf_best_f1, 'o-', label='TF-IDF')
+plt.plot(k_values, onehot_best_f1, 'o-', label='One-hot')
+plt.title('Best F1-Score Comparison (TF-IDF vs One-hot)')
+plt.xlabel('k value')
+plt.ylabel('Best F1-Score')
+plt.xticks(k_values)
+plt.ylim(0, 1)
+plt.legend()
+plt.grid(True, linestyle='--', alpha=0.7)
+
+plt.tight_layout()
+plt.show()
+
+# Create heatmaps to visualize all metrics for all configurations
+plt.figure(figsize=(20, 10))
+
+# 7. Heatmap for TF-IDF results
+plt.subplot(1, 2, 1)
+tfidf_pivot = pd.pivot_table(
+    knn_tfidf_results,
+    values='f1',
+    index='metric',
+    columns='k'
+)
+sns.heatmap(tfidf_pivot, annot=True, cmap='YlGnBu', vmin=0, vmax=1, fmt='.3f')
+plt.title('F1-Score Heatmap for KNN with TF-IDF Features')
+plt.ylabel('Distance Metric')
+plt.xlabel('k Value')
+
+# 8. Heatmap for One-hot results
+plt.subplot(1, 2, 2)
+onehot_pivot = pd.pivot_table(
+    knn_onehot_results,
+    values='f1',
+    index='metric',
+    columns='k'
+)
+sns.heatmap(onehot_pivot, annot=True, cmap='YlGnBu', vmin=0, vmax=1, fmt='.3f')
+plt.title('F1-Score Heatmap for KNN with One-hot Features')
+plt.ylabel('Distance Metric')
+plt.xlabel('k Value')
+
+plt.tight_layout()
+plt.show()
+
+# 9. Create a radar chart to compare the best configurations
+plt.figure(figsize=(10, 8))
+
+# Get the best configuration for each encoding method
+best_tfidf_row = knn_tfidf_results.loc[knn_tfidf_results['f1'].idxmax()]
+best_onehot_row = knn_onehot_results.loc[knn_onehot_results['f1'].idxmax()]
+
+# Prepare data for radar chart
+categories = ['Accuracy', 'Precision', 'Recall', 'F1-Score']
+tfidf_values = [
+    best_tfidf_row['accuracy'],
+    best_tfidf_row['precision'],
+    best_tfidf_row['recall'],
+    best_tfidf_row['f1']
+]
+onehot_values = [
+    best_onehot_row['accuracy'],
+    best_onehot_row['precision'],
+    best_onehot_row['recall'],
+    best_onehot_row['f1']
+]
+
+#Step 4 #########################################################################################
+# Train Logistic Regression models on both matrices
+# For TF-IDF features
+lr_tfidf = LogisticRegression(max_iter=2000, solver='saga', multi_class='auto')
+try:
+    lr_tfidf_results = cross_validate(lr_tfidf, combined_tfidf.toarray(), target, cv=cv, scoring=scoring)
+except Exception as e:
+    print(f"Error with Logistic Regression for TF-IDF: {e}")
+    lr_tfidf_results = {
+        'test_accuracy': np.array([np.nan]),
+        'test_precision': np.array([np.nan]),
+        'test_recall': np.array([np.nan]),
+        'test_f1': np.array([np.nan])
+    }
+
+# For One-hot encoded features
+lr_onehot = LogisticRegression(max_iter=2000, solver='saga', multi_class='auto')
+try:
+    lr_onehot_results = cross_validate(lr_onehot, combined_onehot, target, cv=cv, scoring=scoring)
+except Exception as e:
+    print(f"Error with Logistic Regression for One-hot: {e}")
+    lr_onehot_results = {
+        'test_accuracy': np.array([np.nan]),
+        'test_precision': np.array([np.nan]),
+        'test_recall': np.array([np.nan]),
+        'test_f1': np.array([np.nan])
+    }
+
+# Create a DataFrame to compare Logistic Regression results
+lr_results = pd.DataFrame({
+    'Model': ['LR with TF-IDF', 'LR with One-hot'],
+    'Accuracy': [lr_tfidf_results['test_accuracy'].mean(), lr_onehot_results['test_accuracy'].mean()],
+    'Precision': [lr_tfidf_results['test_precision'].mean(), lr_onehot_results['test_precision'].mean()],
+    'Recall': [lr_tfidf_results['test_recall'].mean(), lr_onehot_results['test_recall'].mean()],
+    'F1-Score': [lr_tfidf_results['test_f1'].mean(), lr_onehot_results['test_f1'].mean()]
+})
+
+print("\nLogistic Regression Results:")
+print(lr_results)
+
+#Step 5 #########################################################################################
+# Compare results across encoding methods, distance metrics, and model types
+
+# Get best KNN configurations
+best_tfidf_knn = knn_tfidf_results.loc[knn_tfidf_results['f1'].idxmax()]
+best_onehot_knn = knn_onehot_results.loc[knn_onehot_results['f1'].idxmax()]
+
+# Create a summary DataFrame for comparison
+summary = pd.DataFrame({
+    'Model': ['Best KNN (TF-IDF)', 'Best KNN (One-hot)', 'LR (TF-IDF)', 'LR (One-hot)'],
+    'Configuration': [
+        f"k={best_tfidf_knn['k']}, metric={best_tfidf_knn['metric']}",
+        f"k={best_onehot_knn['k']}, metric={best_onehot_knn['metric']}",
+        'max_iter=2000, solver=saga',
+        'max_iter=2000, solver=saga'
+    ],
+    'Accuracy': [
+        best_tfidf_knn['accuracy'],
+        best_onehot_knn['accuracy'],
+        lr_tfidf_results['test_accuracy'].mean(),
+        lr_onehot_results['test_accuracy'].mean()
+    ],
+    'F1-Score': [
+        best_tfidf_knn['f1'],
+        best_onehot_knn['f1'],
+        lr_tfidf_results['test_f1'].mean(),
+        lr_onehot_results['test_f1'].mean()
+    ]
+})
+
+print("\nModel Comparison Summary:")
+print(summary.sort_values(by='F1-Score', ascending=False))
+
+=====================================================================================================================================
+=====================================================================================================================================
+=====================================================================================================================================
+=====================================================================================================================================
+Fixed after Categorizing for df['Category'] Instead of df['Disease']
+=====================================================================================================================================
+=====================================================================================================================================
+=====================================================================================================================================
+=====================================================================================================================================
+
+#Task 3: Train KNN Models and Logistic Regression
+
+#Step 1 #########################################################################################
+# Prepare for KNN modeling with different k values and distance metrics
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import cross_val_score, cross_validate, StratifiedKFold
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, make_scorer
+import pandas as pd
+import numpy as np
+import warnings
+warnings.filterwarnings("ignore")  # Suppress warnings
+
+# Define the target variable (disease categories)
+target = df['Category']
+
+# Define k values and distance metrics to test
+k_values = [3, 5, 7]
+metrics = ['euclidean', 'manhattan', 'cosine']
+
+# Define scoring metrics for cross-validation
+scoring = {
+    'accuracy': make_scorer(accuracy_score),
+    'precision': make_scorer(precision_score, average='weighted', zero_division=0),
+    'recall': make_scorer(recall_score, average='weighted', zero_division=0),
+    'f1': make_scorer(f1_score, average='weighted', zero_division=0)
+}
+
+# Create DataFrames to store results
+results_df = pd.DataFrame(columns=['Model', 'Feature', 'k', 'Metric', 'Accuracy', 'Precision', 'Recall', 'F1-Score'])
+
+#Step 2 #########################################################################################
+# Perform 3-fold cross-validation for KNN with different configurations
+cv = StratifiedKFold(n_splits=3, shuffle=True, random_state=42)
+
+# For TF-IDF features
+for k in k_values:
+    for metric in metrics:
+        knn = KNeighborsClassifier(n_neighbors=k, metric=metric, weights='distance')
+        # Convert sparse matrix to dense array
+        tfidf_array = combined_tfidf.toarray()
+        
+        try:
+            cv_results = cross_validate(knn, tfidf_array, target, cv=cv, scoring=scoring)
+            
+            # Store results
+            new_row = pd.DataFrame([{
+                'Model': 'KNN',
+                'Feature': 'TF-IDF',
+                'k': k,
+                'Metric': metric,
+                'Accuracy': cv_results['test_accuracy'].mean(),
+                'Precision': cv_results['test_precision'].mean(),
+                'Recall': cv_results['test_recall'].mean(),
+                'F1-Score': cv_results['test_f1'].mean()
+            }])
+            results_df = pd.concat([results_df, new_row], ignore_index=True)
+        except Exception as e:
+            # Handle any errors
+            new_row = pd.DataFrame([{
+                'Model': 'KNN',
+                'Feature': 'TF-IDF',
+                'k': k,
+                'Metric': metric,
+                'Accuracy': np.nan,
+                'Precision': np.nan,
+                'Recall': np.nan,
+                'F1-Score': np.nan
+            }])
+            results_df = pd.concat([results_df, new_row], ignore_index=True)
+
+# For One-hot encoded features
+for k in k_values:
+    for metric in metrics:
+        knn = KNeighborsClassifier(n_neighbors=k, metric=metric, weights='distance')
+        
+        try:
+            cv_results = cross_validate(knn, combined_onehot, target, cv=cv, scoring=scoring)
+            
+            # Store results
+            new_row = pd.DataFrame([{
+                'Model': 'KNN',
+                'Feature': 'One-hot',
+                'k': k,
+                'Metric': metric,
+                'Accuracy': cv_results['test_accuracy'].mean(),
+                'Precision': cv_results['test_precision'].mean(),
+                'Recall': cv_results['test_recall'].mean(),
+                'F1-Score': cv_results['test_f1'].mean()
+            }])
+            results_df = pd.concat([results_df, new_row], ignore_index=True)
+        except Exception as e:
+            # Handle any errors
+            new_row = pd.DataFrame([{
+                'Model': 'KNN',
+                'Feature': 'One-hot',
+                'k': k,
+                'Metric': metric,
+                'Accuracy': np.nan,
+                'Precision': np.nan,
+                'Recall': np.nan,
+                'F1-Score': np.nan
+            }])
+            results_df = pd.concat([results_df, new_row], ignore_index=True)
+
+#Step 3 #########################################################################################
+# Train Logistic Regression models on both matrices
+# For TF-IDF features
+lr_tfidf = LogisticRegression(max_iter=2000, solver='saga', multi_class='auto', class_weight='balanced')
+try:
+    lr_tfidf_results = cross_validate(lr_tfidf, combined_tfidf.toarray(), target, cv=cv, scoring=scoring)
+    
+    # Store results
+    new_row = pd.DataFrame([{
+        'Model': 'Logistic Regression',
+        'Feature': 'TF-IDF',
+        'k': 'N/A',
+        'Metric': 'N/A',
+        'Accuracy': lr_tfidf_results['test_accuracy'].mean(),
+        'Precision': lr_tfidf_results['test_precision'].mean(),
+        'Recall': lr_tfidf_results['test_recall'].mean(),
+        'F1-Score': lr_tfidf_results['test_f1'].mean()
+    }])
+    results_df = pd.concat([results_df, new_row], ignore_index=True)
+except Exception as e:
+    # Handle any errors
+    new_row = pd.DataFrame([{
+        'Model': 'Logistic Regression',
+        'Feature': 'TF-IDF',
+        'k': 'N/A',
+        'Metric': 'N/A',
+        'Accuracy': np.nan,
+        'Precision': np.nan,
+        'Recall': np.nan,
+        'F1-Score': np.nan
+    }])
+    results_df = pd.concat([results_df, new_row], ignore_index=True)
+
+# For One-hot encoded features
+lr_onehot = LogisticRegression(max_iter=2000, solver='saga', multi_class='auto', class_weight='balanced')
+try:
+    lr_onehot_results = cross_validate(lr_onehot, combined_onehot, target, cv=cv, scoring=scoring)
+    
+    # Store results
+    new_row = pd.DataFrame([{
+        'Model': 'Logistic Regression',
+        'Feature': 'One-hot',
+        'k': 'N/A',
+        'Metric': 'N/A',
+        'Accuracy': lr_onehot_results['test_accuracy'].mean(),
+        'Precision': lr_onehot_results['test_precision'].mean(),
+        'Recall': lr_onehot_results['test_recall'].mean(),
+        'F1-Score': lr_onehot_results['test_f1'].mean()
+    }])
+    results_df = pd.concat([results_df, new_row], ignore_index=True)
+except Exception as e:
+    # Handle any errors
+    new_row = pd.DataFrame([{
+        'Model': 'Logistic Regression',
+        'Feature': 'One-hot',
+        'k': 'N/A',
+        'Metric': 'N/A',
+        'Accuracy': np.nan,
+        'Precision': np.nan,
+        'Recall': np.nan,
+        'F1-Score': np.nan
+    }])
+    results_df = pd.concat([results_df, new_row], ignore_index=True)
+
+#Step 4 #########################################################################################
+# Display results in a clean, formatted table
+# Format numeric columns to 4 decimal places
+numeric_cols = ['Accuracy', 'Precision', 'Recall', 'F1-Score']
+for col in numeric_cols:
+    results_df[col] = results_df[col].apply(lambda x: f"{x:.4f}" if not pd.isna(x) else "N/A")
+
+# Reset index and display the table
+results_df = results_df.reset_index(drop=True)
+results_df.index = results_df.index + 1  # Start index from 1 instead of 0
+print("\nModel Performance Results:")
+print(results_df.to_string(index=True))
+
+#Step 5 #########################################################################################
+# Display the best models based on F1-Score
+print("\nTop 5 Models by F1-Score:")
+# Convert F1-Score back to float for sorting
+results_df['F1-Score_float'] = results_df['F1-Score'].apply(lambda x: float(x) if x != "N/A" else 0)
+top_models = results_df.sort_values(by='F1-Score_float', ascending=False).head(5)
+top_models = top_models.drop('F1-Score_float', axis=1)
+top_models.index = range(1, len(top_models) + 1)  # Reset index to start from 1
+print(top_models.to_string(index=True))
+
+=====================================================================================================================================
+=====================================================================================================================================
+=====================================================================================================================================
+=====================================================================================================================================
+Still problem of normalization:
+=====================================================================================================================================
+=====================================================================================================================================
+=====================================================================================================================================
+=====================================================================================================================================
+#Task 3: Train KNN Models and Logistic Regression
+
+#Step 1 #########################################################################################
+# Prepare for KNN modeling with different k values and distance metrics
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import cross_val_score, cross_validate, StratifiedKFold
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, make_scorer
+from sklearn.preprocessing import StandardScaler, MinMaxScaler  # Added for normalization
+from sklearn.pipeline import Pipeline  # Added for creating pipelines with normalization
+import pandas as pd
+import numpy as np
+import warnings
+warnings.filterwarnings("ignore")  # Suppress warnings
+
+# Define the target variable (disease categories)
+target = df['Category']
+
+# Define k values and distance metrics to test
+k_values = [3, 5, 7]
+metrics = ['euclidean', 'manhattan', 'cosine']
+
+# Define scoring metrics for cross-validation
+scoring = {
+    'accuracy': make_scorer(accuracy_score),
+    'precision': make_scorer(precision_score, average='weighted', zero_division=0),
+    'recall': make_scorer(recall_score, average='weighted', zero_division=0),
+    'f1': make_scorer(f1_score, average='weighted', zero_division=0)
+}
+
+# Create DataFrames to store results
+results_df = pd.DataFrame(columns=['Model', 'Feature', 'Normalization', 'k', 'Metric', 'Accuracy', 'Precision', 'Recall', 'F1-Score'])
+
+#Step 2 #########################################################################################
+# Perform 3-fold cross-validation for KNN with different configurations
+cv = StratifiedKFold(n_splits=3, shuffle=True, random_state=42)
+
+# Prepare data
+tfidf_array = combined_tfidf.toarray()
+onehot_array = combined_onehot
+
+# Define normalization methods to test
+normalizers = {
+    'None': None,
+    'StandardScaler': StandardScaler(),
+    'MinMaxScaler': MinMaxScaler()
+}
+
+# For TF-IDF features
+for norm_name, normalizer in normalizers.items():
+    for k in k_values:
+        for metric in metrics:
+            try:
+                if normalizer is None:
+                    # No normalization
+                    knn = KNeighborsClassifier(n_neighbors=k, metric=metric, weights='distance')
+                    cv_results = cross_validate(knn, tfidf_array, target, cv=cv, scoring=scoring)
+                else:
+                    # With normalization using pipeline
+                    pipeline = Pipeline([
+                        ('normalizer', normalizer),
+                        ('knn', KNeighborsClassifier(n_neighbors=k, metric=metric, weights='distance'))
+                    ])
+                    cv_results = cross_validate(pipeline, tfidf_array, target, cv=cv, scoring=scoring)
+                
+                # Store results
+                new_row = pd.DataFrame([{
+                    'Model': 'KNN',
+                    'Feature': 'TF-IDF',
+                    'Normalization': norm_name,
+                    'k': k,
+                    'Metric': metric,
+                    'Accuracy': cv_results['test_accuracy'].mean(),
+                    'Precision': cv_results['test_precision'].mean(),
+                    'Recall': cv_results['test_recall'].mean(),
+                    'F1-Score': cv_results['test_f1'].mean()
+                }])
+                results_df = pd.concat([results_df, new_row], ignore_index=True)
+            except Exception as e:
+                # Handle any errors
+                new_row = pd.DataFrame([{
+                    'Model': 'KNN',
+                    'Feature': 'TF-IDF',
+                    'Normalization': norm_name,
+                    'k': k,
+                    'Metric': metric,
+                    'Accuracy': np.nan,
+                    'Precision': np.nan,
+                    'Recall': np.nan,
+                    'F1-Score': np.nan
+                }])
+                results_df = pd.concat([results_df, new_row], ignore_index=True)
+
+# For One-hot encoded features
+for norm_name, normalizer in normalizers.items():
+    for k in k_values:
+        for metric in metrics:
+            try:
+                if normalizer is None:
+                    # No normalization
+                    knn = KNeighborsClassifier(n_neighbors=k, metric=metric, weights='distance')
+                    cv_results = cross_validate(knn, onehot_array, target, cv=cv, scoring=scoring)
+                else:
+                    # With normalization using pipeline
+                    pipeline = Pipeline([
+                        ('normalizer', normalizer),
+                        ('knn', KNeighborsClassifier(n_neighbors=k, metric=metric, weights='distance'))
+                    ])
+                    cv_results = cross_validate(pipeline, onehot_array, target, cv=cv, scoring=scoring)
+                
+                # Store results
+                new_row = pd.DataFrame([{
+                    'Model': 'KNN',
+                    'Feature': 'One-hot',
+                    'Normalization': norm_name,
+                    'k': k,
+                    'Metric': metric,
+                    'Accuracy': cv_results['test_accuracy'].mean(),
+                    'Precision': cv_results['test_precision'].mean(),
+                    'Recall': cv_results['test_recall'].mean(),
+                    'F1-Score': cv_results['test_f1'].mean()
+                }])
+                results_df = pd.concat([results_df, new_row], ignore_index=True)
+            except Exception as e:
+                # Handle any errors
+                new_row = pd.DataFrame([{
+                    'Model': 'KNN',
+                    'Feature': 'One-hot',
+                    'Normalization': norm_name,
+                    'k': k,
+                    'Metric': metric,
+                    'Accuracy': np.nan,
+                    'Precision': np.nan,
+                    'Recall': np.nan,
+                    'F1-Score': np.nan
+                }])
+                results_df = pd.concat([results_df, new_row], ignore_index=True)
+
+#Step 3 #########################################################################################
+# Train Logistic Regression models on both matrices with and without normalization
+for norm_name, normalizer in normalizers.items():
+    # For TF-IDF features
+    try:
+        if normalizer is None:
+            # No normalization
+            lr = LogisticRegression(max_iter=2000, solver='saga', multi_class='auto', class_weight='balanced')
+            lr_results = cross_validate(lr, tfidf_array, target, cv=cv, scoring=scoring)
+        else:
+            # With normalization using pipeline
+            pipeline = Pipeline([
+                ('normalizer', normalizer),
+                ('lr', LogisticRegression(max_iter=2000, solver='saga', multi_class='auto', class_weight='balanced'))
+            ])
+            lr_results = cross_validate(pipeline, tfidf_array, target, cv=cv, scoring=scoring)
+        
+        # Store results
+        new_row = pd.DataFrame([{
+            'Model': 'Logistic Regression',
+            'Feature': 'TF-IDF',
+            'Normalization': norm_name,
+            'k': 'N/A',
+            'Metric': 'N/A',
+            'Accuracy': lr_results['test_accuracy'].mean(),
+            'Precision': lr_results['test_precision'].mean(),
+            'Recall': lr_results['test_recall'].mean(),
+            'F1-Score': lr_results['test_f1'].mean()
+        }])
+        results_df = pd.concat([results_df, new_row], ignore_index=True)
+    except Exception as e:
+        # Handle any errors
+        new_row = pd.DataFrame([{
+            'Model': 'Logistic Regression',
+            'Feature': 'TF-IDF',
+            'Normalization': norm_name,
+            'k': 'N/A',
+            'Metric': 'N/A',
+            'Accuracy': np.nan,
+            'Precision': np.nan,
+            'Recall': np.nan,
+            'F1-Score': np.nan
+        }])
+        results_df = pd.concat([results_df, new_row], ignore_index=True)
+
+    # For One-hot encoded features
+    try:
+        if normalizer is None:
+            # No normalization
+            lr = LogisticRegression(max_iter=2000, solver='saga', multi_class='auto', class_weight='balanced')
+            lr_results = cross_validate(lr, onehot_array, target, cv=cv, scoring=scoring)
+        else:
+            # With normalization using pipeline
+            pipeline = Pipeline([
+                ('normalizer', normalizer),
+                ('lr', LogisticRegression(max_iter=2000, solver='saga', multi_class='auto', class_weight='balanced'))
+            ])
+            lr_results = cross_validate(pipeline, onehot_array, target, cv=cv, scoring=scoring)
+        
+        # Store results
+        new_row = pd.DataFrame([{
+            'Model': 'Logistic Regression',
+            'Feature': 'One-hot',
+            'Normalization': norm_name,
+            'k': 'N/A',
+            'Metric': 'N/A',
+            'Accuracy': lr_results['test_accuracy'].mean(),
+            'Precision': lr_results['test_precision'].mean(),
+            'Recall': lr_results['test_recall'].mean(),
+            'F1-Score': lr_results['test_f1'].mean()
+        }])
+        results_df = pd.concat([results_df, new_row], ignore_index=True)
+    except Exception as e:
+        # Handle any errors
+        new_row = pd.DataFrame([{
+            'Model': 'Logistic Regression',
+            'Feature': 'One-hot',
+            'Normalization': norm_name,
+            'k': 'N/A',
+            'Metric': 'N/A',
+            'Accuracy': np.nan,
+            'Precision': np.nan,
+            'Recall': np.nan,
+            'F1-Score': np.nan
+        }])
+        results_df = pd.concat([results_df, new_row], ignore_index=True)
+
+#Step 4 #########################################################################################
+# Display results in a clean, formatted table
+# Format numeric columns to 4 decimal places
+numeric_cols = ['Accuracy', 'Precision', 'Recall', 'F1-Score']
+for col in numeric_cols:
+    results_df[col] = results_df[col].apply(lambda x: f"{x:.4f}" if not pd.isna(x) else "N/A")
+
+# Reset index and display the table
+results_df = results_df.reset_index(drop=True)
+results_df.index = results_df.index + 1  # Start index from 1 instead of 0
+print("\nModel Performance Results:")
+print(results_df.to_string(index=True))
+
+#Step 5 #########################################################################################
+# Display the best models based on F1-Score
+print("\nTop 10 Models by F1-Score:")
+# Convert F1-Score back to float for sorting
+results_df['F1-Score_float'] = results_df['F1-Score'].apply(lambda x: float(x) if x != "N/A" else 0)
+top_models = results_df.sort_values(by='F1-Score_float', ascending=False).head(10)
+top_models = top_models.drop('F1-Score_float', axis=1)
+top_models.index = range(1, len(top_models) + 1)  # Reset index to start from 1
+print(top_models.to_string(index=True))
+
+#Step 6 #########################################################################################
+# Visualize the effect of normalization on model performance
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+# Convert F1-Score to float for visualization
+results_df['F1-Score_float'] = results_df['F1-Score'].apply(lambda x: float(x) if x != "N/A" else 0)
+
+# Create a figure for visualization
+plt.figure(figsize=(15, 10))
+
+# Plot the effect of normalization on KNN with TF-IDF
+plt.subplot(2, 2, 1)
+sns.boxplot(x='Normalization', y='F1-Score_float', 
+            data=results_df[(results_df['Model'] == 'KNN') & (results_df['Feature'] == 'TF-IDF')])
+plt.title('Effect of Normalization on KNN with TF-IDF')
+plt.ylim(0, 1)
+plt.ylabel('F1-Score')
+plt.xticks(rotation=45)
+
+# Plot the effect of normalization on KNN with One-hot
+plt.subplot(2, 2, 2)
+sns.boxplot(x='Normalization', y='F1-Score_float', 
+            data=results_df[(results_df['Model'] == 'KNN') & (results_df['Feature'] == 'One-hot')])
+plt.title('Effect of Normalization on KNN with One-hot')
+plt.ylim(0, 1)
+plt.ylabel('F1-Score')
+plt.xticks(rotation=45)
+
+# Plot the effect of k on KNN performance (with best normalization)
+best_norm = top_models['Normalization'].iloc[0]
+plt.subplot(2, 2, 3)
+sns.lineplot(x='k', y='F1-Score_float', hue='Metric',
+             data=results_df[(results_df['Model'] == 'KNN') & 
+                            (results_df['Normalization'] == best_norm) &
+                            (results_df['k'] != 'N/A')])
+plt.title(f'Effect of k and Metric on KNN Performance (with {best_norm})')
+plt.ylim(0, 1)
+plt.ylabel('F1-Score')
+
+# Compare best models across feature types and normalization
+plt.subplot(2, 2, 4)
+best_models = results_df.groupby(['Model', 'Feature', 'Normalization'])['F1-Score_float'].max().reset_index()
+sns.barplot(x='Feature', y='F1-Score_float', hue='Normalization', data=best_models)
+plt.title('Best F1-Score by Feature Type and Normalization')
+plt.ylim(0, 1)
+plt.ylabel('F1-Score')
+plt.xticks(rotation=0)
+plt.legend(title='Normalization')
+
+plt.tight_layout()
+plt.show()
+
+# Clean up temporary column
+results_df = results_df.drop('F1-Score_float', axis=1)
